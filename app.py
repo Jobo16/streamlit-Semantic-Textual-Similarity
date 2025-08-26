@@ -25,11 +25,13 @@ from config import (
 # 定义相似度方法和输出列配置
 SIMILARITY_METHOD = "cosine"
 OUTPUT_COLUMNS = {
-    'query': '查询文本',
-    'rank': '排名',
-    'similar_text': '相似文本',
-    'similarity_score': '相似度评分',
-    'llm_reason': 'LLM分析理由'
+    'query': '题目',
+    'similar_text_1': '相似题目1',
+    'similarity_score_1': '相似度1',
+    'similar_text_2': '相似题目2',
+    'similarity_score_2': '相似度2',
+    'similar_text_3': '相似题目3',
+    'similarity_score_3': '相似度3'
 }
 
 
@@ -161,28 +163,28 @@ class SimilarityMatchingApp:
             return enhanced_results
     
     def create_output_dataframe(self, enhanced_results: Dict[str, List[Tuple[str, float, str]]]) -> pd.DataFrame:
-        """创建输出DataFrame"""
+        """创建输出DataFrame - 水平排列格式"""
         output_data = []
         
         for query_text, results in enhanced_results.items():
-            if results:
-                for i, (similar_text, similarity_score, llm_reason) in enumerate(results):
-                    output_data.append({
-                        OUTPUT_COLUMNS['query']: query_text,
-                        OUTPUT_COLUMNS['rank']: i + 1,
-                        OUTPUT_COLUMNS['similar_text']: similar_text,
-                        OUTPUT_COLUMNS['similarity_score']: round(similarity_score, 4),
-                        OUTPUT_COLUMNS['llm_reason']: llm_reason
-                    })
-            else:
-                # 没有找到相似文本的情况
-                output_data.append({
-                    OUTPUT_COLUMNS['query']: query_text,
-                    OUTPUT_COLUMNS['rank']: 1,
-                    OUTPUT_COLUMNS['similar_text']: "未找到相似文本",
-                    OUTPUT_COLUMNS['similarity_score']: 0.0,
-                    OUTPUT_COLUMNS['llm_reason']: "相似度低于阈值"
-                })
+            # 创建一行数据，包含查询题目和最多3个相似题目
+            row_data = {OUTPUT_COLUMNS['query']: query_text}
+            
+            # 填充相似题目和相似度（最多3个）
+            for i in range(3):
+                similar_key = f'similar_text_{i+1}'
+                score_key = f'similarity_score_{i+1}'
+                
+                if i < len(results):
+                    similar_text, similarity_score, _ = results[i]
+                    row_data[OUTPUT_COLUMNS[similar_key]] = similar_text
+                    row_data[OUTPUT_COLUMNS[score_key]] = round(similarity_score, 4)
+                else:
+                    # 如果没有足够的相似题目，填充空值
+                    row_data[OUTPUT_COLUMNS[similar_key]] = ""
+                    row_data[OUTPUT_COLUMNS[score_key]] = ""
+            
+            output_data.append(row_data)
         
         return pd.DataFrame(output_data)
     
@@ -351,15 +353,29 @@ def main():
                             st.metric("查询题目数", len(user_texts))
                         
                         with col2:
-                            total_matches = len(result_df)
+                            # 计算总的匹配结果数（非空的相似题目）
+                            total_matches = 0
+                            for i in range(1, 4):
+                                col_name = OUTPUT_COLUMNS[f'similar_text_{i}']
+                                total_matches += len(result_df[result_df[col_name] != ""])
                             st.metric("匹配结果数", total_matches)
                         
                         with col3:
-                            avg_score = result_df[OUTPUT_COLUMNS['similarity_score']].mean()
+                            # 计算平均相似度（所有非空相似度的平均值）
+                            all_scores = []
+                            for i in range(1, 4):
+                                score_col = OUTPUT_COLUMNS[f'similarity_score_{i}']
+                                scores = result_df[result_df[score_col] != ""][score_col]
+                                all_scores.extend(scores.tolist())
+                            avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
                             st.metric("平均相似度", f"{avg_score:.3f}")
                         
                         with col4:
-                            high_quality_matches = len(result_df[result_df[OUTPUT_COLUMNS['similarity_score']] >= 0.7])
+                            # 计算高质量匹配数（相似度>=0.7的匹配）
+                            high_quality_matches = 0
+                            for i in range(1, 4):
+                                score_col = OUTPUT_COLUMNS[f'similarity_score_{i}']
+                                high_quality_matches += len(result_df[(result_df[score_col] != "") & (result_df[score_col] >= 0.7)])
                             st.metric("高质量匹配", f"{high_quality_matches}")
                         
                         # 显示结果表格
@@ -428,20 +444,22 @@ def main():
             5. **下载结果**: 处理完成后下载Excel格式的结果文件
             
             ### ⚙️ 系统特性
-            
-            - **智能匹配**: 结合向量相似度和LLM语义理解
-            - **高效处理**: 支持批量并发处理
-            - **详细结果**: 提供相似度评分和LLM分析理由
-            - **Excel导出**: 结果以Excel格式提供下载
+             
+             - **智能匹配**: 结合向量相似度和LLM语义理解
+             - **高效处理**: 支持批量并发处理
+             - **水平排列**: 每行显示一个题目及其前3个最相似题目
+             - **Excel导出**: 结果以Excel格式提供下载
             
             ### 📊 输出格式
-            
-            结果文件包含以下列：
-            - **查询文本**: 您上传的原始题目
-            - **排名**: 相似度排名
-            - **相似文本**: 匹配到的相似题目
-            - **相似度评分**: 0-1之间的相似度分数
-            - **LLM分析理由**: AI提供的相似性分析
+             
+             结果文件包含以下列：
+             - **题目**: 您上传的原始题目
+             - **相似题目1**: 最相似的题目
+             - **相似度1**: 对应的相似度分数（0-1之间）
+             - **相似题目2**: 第二相似的题目
+             - **相似度2**: 对应的相似度分数
+             - **相似题目3**: 第三相似的题目
+             - **相似度3**: 对应的相似度分数
             """)
 
 
