@@ -3,6 +3,12 @@
 项目配置文件 - Streamlit版本
 """
 
+from pathlib import Path
+
+# 项目路径
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "题库"
+
 # API配置
 API_KEY = "sk-trspbkqtlmeezqymfhuktmikyudbevnrqudyniabwwhzqaos"
 BASE_URL = "https://api.siliconflow.cn/v1"
@@ -21,8 +27,7 @@ LLM_TOP_K = 50
 LLM_FREQUENCY_PENALTY = 0.5
 
 # 文件路径配置 - Streamlit版本
-import os
-EMBEDDINGS_CACHE_PATH = os.path.join(os.path.dirname(__file__), "题库", "embeddings_cache.pkl")
+EMBEDDINGS_CACHE_PATH = DATA_DIR / "embeddings_cache.pkl"
 
 # 并发配置
 # 基于API限制: L0级别 1000 RPM (每分钟请求数), 50000 TPM (每分钟token数)

@@ -3,221 +3,198 @@
 相似度计算和匹配模块
 """
 
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
-from typing import List, Dict, Any, Tuple
 from scipy.spatial.distance import cosine
-from config import TOP_K_SIMILAR, SIMILARITY_THRESHOLD, VERBOSE
+
+from similarity_app.config import TOP_K_SIMILAR, SIMILARITY_THRESHOLD, VERBOSE
 
 
 class SimilarityMatcher:
     """相似度匹配器类"""
-    
+
     def __init__(self, top_k: int = TOP_K_SIMILAR, threshold: float = SIMILARITY_THRESHOLD):
         self.top_k = top_k
         self.threshold = threshold
-    
+
     def cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
         """计算两个向量的余弦相似度"""
         try:
-            # 确保向量是一维的
             vec1 = vec1.flatten()
             vec2 = vec2.flatten()
-            
-            # 检查向量长度是否一致
+
             if len(vec1) != len(vec2):
                 print(f"警告: 向量长度不一致 {len(vec1)} vs {len(vec2)}")
                 return 0.0
-            
-            # 检查向量是否为零向量
+
             if np.allclose(vec1, 0) or np.allclose(vec2, 0):
                 return 0.0
-            
-            # 计算余弦相似度 (1 - cosine_distance)
+
             similarity = 1 - cosine(vec1, vec2)
-            
-            # 处理NaN值
             if np.isnan(similarity):
                 return 0.0
-            
+
             return float(similarity)
-            
-        except Exception as e:
-            print(f"计算余弦相似度时发生错误: {str(e)}")
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"计算余弦相似度时发生错误: {str(exc)}")
             return 0.0
-    
+
     def euclidean_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
         """计算两个向量的欧几里得相似度"""
         try:
             vec1 = vec1.flatten()
             vec2 = vec2.flatten()
-            
+
             if len(vec1) != len(vec2):
                 return 0.0
-            
-            # 计算欧几里得距离
+
             distance = np.linalg.norm(vec1 - vec2)
-            
-            # 转换为相似度 (距离越小，相似度越高)
             similarity = 1 / (1 + distance)
-            
             return float(similarity)
-            
-        except Exception as e:
-            print(f"计算欧几里得相似度时发生错误: {str(e)}")
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"计算欧几里得相似度时发生错误: {str(exc)}")
             return 0.0
-    
+
     def dot_product_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
         """计算两个向量的点积相似度"""
         try:
             vec1 = vec1.flatten()
             vec2 = vec2.flatten()
-            
+
             if len(vec1) != len(vec2):
                 return 0.0
-            
-            # 归一化向量
+
             vec1_norm = vec1 / (np.linalg.norm(vec1) + 1e-8)
             vec2_norm = vec2 / (np.linalg.norm(vec2) + 1e-8)
-            
-            # 计算点积
             similarity = np.dot(vec1_norm, vec2_norm)
-            
             return float(similarity)
-            
-        except Exception as e:
-            print(f"计算点积相似度时发生错误: {str(e)}")
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"计算点积相似度时发生错误: {str(exc)}")
             return 0.0
-    
-    def find_most_similar(self, 
-                         query_embedding: np.ndarray, 
-                         candidate_embeddings: Dict[str, np.ndarray],
-                         similarity_method: str = 'cosine') -> List[Tuple[str, float]]:
+
+    def find_most_similar(
+        self,
+        query_embedding: np.ndarray,
+        candidate_embeddings: Dict[str, np.ndarray],
+        similarity_method: str = "cosine",
+    ) -> List[Tuple[str, float]]:
         """找到最相似的候选项"""
-        similarities = []
-        
-        # 选择相似度计算方法
-        if similarity_method == 'cosine':
+        similarities: List[Tuple[str, float]] = []
+
+        if similarity_method == "cosine":
             similarity_func = self.cosine_similarity
-        elif similarity_method == 'euclidean':
+        elif similarity_method == "euclidean":
             similarity_func = self.euclidean_similarity
-        elif similarity_method == 'dot_product':
+        elif similarity_method == "dot_product":
             similarity_func = self.dot_product_similarity
         else:
             print(f"未知的相似度计算方法: {similarity_method}，使用余弦相似度")
             similarity_func = self.cosine_similarity
-        
-        # 计算与每个候选项的相似度
+
         for text, embedding in candidate_embeddings.items():
             similarity = similarity_func(query_embedding, embedding)
-            
-            # 只保留超过阈值的相似度
             if similarity >= self.threshold:
                 similarities.append((text, similarity))
-        
-        # 按相似度降序排序
+
         similarities.sort(key=lambda x: x[1], reverse=True)
-        
-        # 返回top-k个最相似的结果
-        return similarities[:self.top_k]
-    
-    def batch_find_similar(self, 
-                          query_embeddings: Dict[str, np.ndarray],
-                          candidate_embeddings: Dict[str, np.ndarray],
-                          similarity_method: str = 'cosine') -> Dict[str, List[Tuple[str, float]]]:
+        return similarities[: self.top_k]
+
+    def batch_find_similar(
+        self,
+        query_embeddings: Dict[str, np.ndarray],
+        candidate_embeddings: Dict[str, np.ndarray],
+        similarity_method: str = "cosine",
+    ) -> Dict[str, List[Tuple[str, float]]]:
         """批量查找相似项"""
-        results = {}
-        
+        results: Dict[str, List[Tuple[str, float]]] = {}
+
         if VERBOSE:
-            print(f"开始批量相似度匹配...")
+            print("开始批量相似度匹配...")
             print(f"查询项数量: {len(query_embeddings)}")
             print(f"候选项数量: {len(candidate_embeddings)}")
             print(f"相似度计算方法: {similarity_method}")
             print(f"相似度阈值: {self.threshold}")
             print(f"返回Top-K: {self.top_k}")
-        
+
         for i, (query_text, query_embedding) in enumerate(query_embeddings.items()):
             similar_items = self.find_most_similar(
-                query_embedding, 
-                candidate_embeddings, 
-                similarity_method
+                query_embedding,
+                candidate_embeddings,
+                similarity_method,
             )
-            
+
             results[query_text] = similar_items
-            
-            # 显示进度
+
             if VERBOSE and ((i + 1) % 10 == 0 or (i + 1) == len(query_embeddings)):
                 print(f"已处理: {i + 1}/{len(query_embeddings)} 个查询")
-        
+
         if VERBOSE:
             print("批量相似度匹配完成!")
         return results
-    
-    def get_similarity_matrix(self, 
-                             embeddings1: Dict[str, np.ndarray],
-                             embeddings2: Dict[str, np.ndarray] = None,
-                             similarity_method: str = 'cosine') -> np.ndarray:
+
+    def get_similarity_matrix(
+        self,
+        embeddings1: Dict[str, np.ndarray],
+        embeddings2: Dict[str, np.ndarray] = None,
+        similarity_method: str = "cosine",
+    ) -> np.ndarray:
         """计算相似度矩阵"""
         if embeddings2 is None:
             embeddings2 = embeddings1
-        
+
         texts1 = list(embeddings1.keys())
         texts2 = list(embeddings2.keys())
-        
         matrix = np.zeros((len(texts1), len(texts2)))
-        
-        # 选择相似度计算方法
-        if similarity_method == 'cosine':
+
+        if similarity_method == "cosine":
             similarity_func = self.cosine_similarity
-        elif similarity_method == 'euclidean':
+        elif similarity_method == "euclidean":
             similarity_func = self.euclidean_similarity
-        elif similarity_method == 'dot_product':
+        elif similarity_method == "dot_product":
             similarity_func = self.dot_product_similarity
         else:
             similarity_func = self.cosine_similarity
-        
+
         for i, text1 in enumerate(texts1):
             for j, text2 in enumerate(texts2):
                 similarity = similarity_func(
-                    embeddings1[text1], 
-                    embeddings2[text2]
+                    embeddings1[text1],
+                    embeddings2[text2],
                 )
                 matrix[i, j] = similarity
-        
+
         return matrix
-    
-    def filter_by_threshold(self, 
-                           similarities: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+
+    def filter_by_threshold(self, similarities: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """根据阈值过滤相似度结果"""
         return [(text, score) for text, score in similarities if score >= self.threshold]
-    
-    def get_statistics(self, 
-                      similarity_results: Dict[str, List[Tuple[str, float]]]) -> Dict[str, Any]:
+
+    def get_statistics(self, similarity_results: Dict[str, List[Tuple[str, float]]]) -> Dict[str, Any]:
         """获取相似度匹配统计信息"""
         total_queries = len(similarity_results)
         total_matches = sum(len(matches) for matches in similarity_results.values())
-        
-        # 计算平均相似度
-        all_similarities = []
+
+        all_similarities: List[float] = []
         for matches in similarity_results.values():
             all_similarities.extend([score for _, score in matches])
-        
-        avg_similarity = np.mean(all_similarities) if all_similarities else 0.0
-        max_similarity = np.max(all_similarities) if all_similarities else 0.0
-        min_similarity = np.min(all_similarities) if all_similarities else 0.0
-        
-        # 计算匹配率
+
+        avg_similarity = float(np.mean(all_similarities)) if all_similarities else 0.0
+        max_similarity = float(np.max(all_similarities)) if all_similarities else 0.0
+        min_similarity = float(np.min(all_similarities)) if all_similarities else 0.0
+
         queries_with_matches = sum(1 for matches in similarity_results.values() if matches)
         match_rate = queries_with_matches / total_queries if total_queries > 0 else 0.0
-        
+
         return {
-            'total_queries': total_queries,
-            'total_matches': total_matches,
-            'queries_with_matches': queries_with_matches,
-            'match_rate': round(match_rate, 4),
-            'avg_matches_per_query': round(total_matches / total_queries, 2) if total_queries > 0 else 0.0,
-            'avg_similarity': round(avg_similarity, 4),
-            'max_similarity': round(max_similarity, 4),
-            'min_similarity': round(min_similarity, 4),
-            'similarity_threshold': self.threshold,
-            'top_k': self.top_k
+            "total_queries": total_queries,
+            "total_matches": total_matches,
+            "queries_with_matches": queries_with_matches,
+            "match_rate": round(match_rate, 4),
+            "avg_matches_per_query": round(total_matches / total_queries, 2) if total_queries > 0 else 0.0,
+            "avg_similarity": round(avg_similarity, 4),
+            "max_similarity": round(max_similarity, 4),
+            "min_similarity": round(min_similarity, 4),
+            "similarity_threshold": self.threshold,
+            "top_k": self.top_k,
         }
